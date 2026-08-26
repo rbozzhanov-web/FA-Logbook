@@ -97,7 +97,7 @@ const CREW_PAY_NORM_TIMES: readonly [string, string, number][] = [
   ['DAD', 'NQZ', 518], // 8:38
   ['DEL', 'ALA', 211], // 3:31
   ['DME', 'ALA', 272], // 4:32
-  ['DMB', 'NQZ', 109], // 1:49
+  ['DMB', 'NQZ', 109], // 1:49 — verify this DEP code against the source table; may be "DME"
   ['DME', 'NQZ', 210], // 3:30
   ['DOH', 'ALA', 281], // 4:41
   ['DOH', 'CIT', 221], // 3:41
