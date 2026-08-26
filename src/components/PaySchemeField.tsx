@@ -31,18 +31,35 @@ export function PaySchemeField({ value, onChange }: PaySchemeFieldProps) {
       />
       <View style={styles.row}>
         <NumberField
-          label="Base salary (₸)"
-          value={value.baseSalary}
-          onCommit={(baseSalary) => onChange({ ...value, baseSalary })}
+          label="Salary (₸)"
+          value={value.monthlySalary}
+          onCommit={(monthlySalary) => onChange({ ...value, monthlySalary })}
           style={styles.half}
         />
         <NumberField
           label="Travel allowance (₸)"
-          value={value.perDiem}
-          onCommit={(perDiem) => onChange({ ...value, perDiem })}
+          value={value.monthlyTransport}
+          onCommit={(monthlyTransport) => onChange({ ...value, monthlyTransport })}
           style={styles.half}
         />
       </View>
+      <Toggle
+        label="Prorate salary and allowance by sick / unfit days"
+        value={value.proratesFixedPayByAbsence}
+        onChange={(proratesFixedPayByAbsence) => onChange({ ...value, proratesFixedPayByAbsence })}
+      />
+
+      <Text style={styles.groupTitle}>Sick pay</Text>
+      <NumberField
+        label="Daily rate (₸)"
+        value={value.dailySickPayRate}
+        onCommit={(dailySickPayRate) => onChange({ ...value, dailySickPayRate })}
+      />
+      <Text style={styles.hint}>
+        Kazakhstani practice bases this on average earnings over the trailing 12 months, which
+        can't be reconstructed from the roster alone — enter your own real rate here. Left at 0,
+        sick days are unpaid.
+      </Text>
 
       <TierEditor
         title="Hour bands"
@@ -70,6 +87,7 @@ export function PaySchemeField({ value, onChange }: PaySchemeFieldProps) {
           <Text style={styles.label}>Counted as</Text>
           <Segmented<NightBasis>
             options={[
+              { value: 'halfBlock', label: 'Half of block' },
               { value: 'contractual', label: 'Clock rule' },
               { value: 'actual', label: 'Real darkness' },
             ]}
@@ -122,10 +140,41 @@ export function PaySchemeField({ value, onChange }: PaySchemeFieldProps) {
         />
       </View>
       <Text style={styles.hint}>
-        Applied in that order, each on what the one before it left — not three separate percentages
-        of the gross.
+        ОСМС and ОПВ are each taken straight off the gross. ИПН is taken from what they, and the
+        standard deduction below, leave.
+      </Text>
+      <NumberField
+        label="ИПН standard deduction (₸)"
+        value={value.ipnStandardDeduction}
+        onCommit={(ipnStandardDeduction) => onChange({ ...value, ipnStandardDeduction })}
+      />
+      <Text style={styles.hint}>
+        A legally set figure tied to Kazakhstan's yearly minimum-calculation-index update — re-enter
+        it when it changes.
       </Text>
     </View>
+  );
+}
+
+function Toggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <Pressable style={styles.toggleRow} onPress={() => onChange(!value)}>
+      <View style={[styles.toggleTrack, value && styles.toggleTrackActive]}>
+        <View style={[styles.toggleThumb, value && styles.toggleThumbActive]} />
+      </View>
+      <Text style={styles.toggleLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -395,4 +444,23 @@ const createStyles = (c: AppColors) =>
     segmentActive: { backgroundColor: c.primary },
     segmentText: { color: c.textMuted, fontWeight: '600', fontSize: 12 },
     segmentTextActive: { color: c.onPrimary },
+
+    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+    toggleTrack: {
+      width: 40,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: c.inputBorder,
+      padding: 2,
+      justifyContent: 'center',
+    },
+    toggleTrackActive: { backgroundColor: c.primary },
+    toggleThumb: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: c.card,
+    },
+    toggleThumbActive: { alignSelf: 'flex-end' },
+    toggleLabel: { flex: 1, fontSize: 13, color: c.text },
   });

@@ -1,9 +1,10 @@
 /**
  * The pay agreement the app computes against.
  *
- * Every figure here came from a crew member's own pay spreadsheet, and every one of them is a
- * term of a contract rather than a fact about flying — so all of it is editable. Nothing in the
- * calculation hard-codes a rate, a threshold or a multiplier.
+ * Every figure here came from a crew member's own real payslip, and every one of them is a term
+ * of a contract or of Kazakhstani tax law rather than a fact about flying — so all of it is
+ * editable. Nothing in the calculation hard-codes a rate, a threshold, a multiplier or a
+ * deduction figure.
  */
 
 /**
@@ -11,17 +12,23 @@
  *
  * `upTo` is the running total at which the tier stops — 60 means "the first 60 hours", 80 means
  * "up to the 80th hour". The last tier in a list carries no `upTo` and runs open-ended, which is
- * how anything past the top printed band is paid: the source spreadsheet stops at 100 hours and
- * 38 sectors, and a month that goes further has to be paid *something*.
+ * how anything past the top printed band is paid: a real payslip's own bands stop at some point,
+ * and a month that goes further still has to be paid *something*.
+ *
+ * For the hour bands, `multiplier` is the *effective* rate for that whole band (1, 2, 2.5 — not
+ * the extra 0/1/1.5 a payslip prints as a separate surcharge line): the payslip pays the first
+ * 60 hours once and the 60–80 band a *second* time as a top-up, which nets out to the same total
+ * as paying the 60–80 band at ×2 outright. Keeping the scheme in terms of the net effective rate
+ * means an agreement's numbers ("60–80 is worth double") map straight onto this field; splitting
+ * the base pay from its top-up is `calculatePay`'s job, done once, in one place.
  */
 export interface PayTier {
   upTo?: number;
-  /** Multiplier applied to the base rate for each unit inside this tier. */
   multiplier: number;
 }
 
-/** Which of the app's two night figures the pay calculation is fed. */
-export type NightBasis = 'contractual' | 'actual';
+/** Which of the app's night figures the pay calculation is fed. */
+export type NightBasis = 'halfBlock' | 'contractual' | 'actual';
 
 /** Whether positioning is paid by the hours flown or by the number of sectors. */
 export type DeadheadBasis = 'hours' | 'sectors';
@@ -29,16 +36,23 @@ export type DeadheadBasis = 'hours' | 'sectors';
 export interface PayScheme {
   /** The hourly rate everything else is a multiple of. */
   hourlyRate: number;
-  /** Fixed monthly salary, paid regardless of hours. */
-  baseSalary: number;
-  /** Fixed monthly travel allowance. */
-  perDiem: number;
+
+  /**
+   * Full-month salary and travel allowance, before proration.
+   *
+   * Both are cut down to `(daysInMonth - unpaidAbsenceDays) / daysInMonth` of themselves when
+   * `proratesFixedPayByAbsence` is on — a month with a week of sick leave pays a week less of
+   * each. Set the flag off for an agreement that pays them in full regardless of attendance.
+   */
+  monthlySalary: number;
+  monthlyTransport: number;
+  proratesFixedPayByAbsence: boolean;
 
   /** Block-hour bands. Only operating hours reach these — positioning is paid separately. */
   hourTiers: PayTier[];
   /**
-   * Sector bands. The first band's multiplier is zero: the agreement's first fifteen sectors
-   * carry no sector payment at all, they are covered by the hourly pay.
+   * Sector bands. The first band's multiplier is zero: an agreement's first several sectors
+   * commonly carry no sector payment at all, being covered by the hourly pay.
    */
   sectorTiers: PayTier[];
 
@@ -49,31 +63,38 @@ export interface PayScheme {
   deadheadBasis: DeadheadBasis;
 
   /**
-   * Deductions, as fractions. They are not independent percentages of the gross — each is taken
-   * from what the one before it left, which is why the order they appear in here is the order
-   * they are applied in.
+   * Certified sick leave, paid per day rather than as a share of the month's flying — a crew
+   * member on the ground the whole time doesn't fly, and doesn't get paid at the hourly rate for
+   * it. Left at 0 until set: Kazakhstani practice bases the daily rate on average earnings over
+   * the trailing 12 months, which this app has no way to reconstruct from the roster alone, so a
+   * plausible-looking guess would be worse than an honest zero pending manual entry.
    */
+  dailySickPayRate: number;
+
   osmsRate: number;
   opvRate: number;
   ipnRate: number;
+  /**
+   * The standard deduction subtracted before ИПН is applied — a legally set figure (currently
+   * expressed in МРП) that changes with the yearly minimum-calculation-index update, so it is
+   * kept as a plain number to re-enter rather than a formula this app would get stale.
+   */
+  ipnStandardDeduction: number;
 }
 
 /**
- * The scheme as the source spreadsheet has it.
+ * The scheme as a real Air Astana cabin-crew payslip has it.
  *
- * Reproduces its worked example to the tenge (see `__tests__/calculatePay.test.ts`), with two
- * deliberate departures, both noted where they occur:
- *
- *  - the top hour and sector bands run open-ended rather than stopping at 100 hours and 38
- *    sectors, so a bigger month is still costed;
- *  - ОСМС is 2% of the gross. The sheet's own ОСМС cell reads 12000, but its ОПВ, ИПН and net
- *    figures are only reachable from 2% (16 495.51) — the three of them agree with each other
- *    and disagree with that one cell, so the cell is what gets treated as the mistake.
+ * Reproduces that payslip's worked example to the tenge across every line — salary, hours,
+ * night, sector and positioning pay, sick pay, and all three deductions — as pinned in
+ * `__tests__/calculatePay.test.ts`.
  */
 export const DEFAULT_PAY_SCHEME: PayScheme = {
   hourlyRate: 3100,
-  baseSalary: 12000,
-  perDiem: 70000,
+
+  monthlySalary: 164317,
+  monthlyTransport: 78000,
+  proratesFixedPayByAbsence: true,
 
   hourTiers: [
     { upTo: 60, multiplier: 1 },
@@ -90,14 +111,17 @@ export const DEFAULT_PAY_SCHEME: PayScheme = {
   ],
 
   nightMultiplier: 0.5,
-  nightBasis: 'contractual',
+  nightBasis: 'halfBlock',
 
   deadheadMultiplier: 0.5,
   deadheadBasis: 'hours',
 
+  dailySickPayRate: 0,
+
   osmsRate: 0.02,
   opvRate: 0.1,
   ipnRate: 0.1,
+  ipnStandardDeduction: 129750,
 };
 
 /** A tier's range in words, for labelling a payslip line. */
@@ -111,7 +135,7 @@ export function describeTier(tiers: PayTier[], index: number, unit: 'h' | 'secto
   return `${from + 1}–${to}${suffix}`;
 }
 
-const SCHEME_VERSION = 1;
+const SCHEME_VERSION = 2;
 
 /**
  * Stored as JSON rather than as a dozen separate preference keys: the scheme is one agreement,
@@ -146,7 +170,19 @@ export function parsePayScheme(raw: string | undefined): PayScheme | undefined {
     sectorTiers: validTiers(value.sectorTiers) ?? DEFAULT_PAY_SCHEME.sectorTiers,
   };
 
-  return isFiniteNumber(scheme.hourlyRate) ? scheme : undefined;
+  const requiredNumbers: (keyof PayScheme)[] = [
+    'hourlyRate',
+    'monthlySalary',
+    'monthlyTransport',
+    'dailySickPayRate',
+    'osmsRate',
+    'opvRate',
+    'ipnRate',
+    'ipnStandardDeduction',
+  ];
+  if (requiredNumbers.some((key) => !isFiniteNumber(scheme[key]))) return undefined;
+
+  return scheme;
 }
 
 function validTiers(tiers: unknown): PayTier[] | undefined {

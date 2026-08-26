@@ -94,7 +94,8 @@ export default function PayScreen() {
             scheme.hourlyRate,
           )} ₸ an hour.`}
         >
-          {pay.hourLines.map((line) => (
+          <LineRow line={pay.hourBaseLine} unit="h" rate={scheme.hourlyRate} />
+          {pay.hourSurchargeLines.map((line) => (
             <LineRow key={line.label} line={line} unit="h" rate={scheme.hourlyRate} />
           ))}
           <SubtotalRow label="Hour pay" amount={pay.hourPay} />
@@ -103,9 +104,11 @@ export default function PayScreen() {
         <Section
           title="Night"
           note={
-            scheme.nightBasis === 'contractual'
-              ? 'Counted under the clock rule set in Settings — the figure an agreement pays on.'
-              : 'Counted from the sun’s real position along each route.'
+            scheme.nightBasis === 'halfBlock'
+              ? 'Counted as half the block hours, the default an agreement pays on.'
+              : scheme.nightBasis === 'contractual'
+                ? 'Counted under the clock rule set in Settings — the figure an agreement pays on.'
+                : 'Counted from the sun’s real position along each route.'
           }
         >
           <LineRow line={pay.nightLine} unit="h" rate={scheme.hourlyRate} />
@@ -129,24 +132,37 @@ export default function PayScreen() {
           />
         </Section>
 
-        <Section title="Fixed">
-          <AmountRow label="Base salary" amount={pay.baseSalary} />
-          <AmountRow label="Travel allowance" amount={pay.perDiem} />
+        <Section
+          title="Fixed"
+          note={
+            pay.paidDays < pay.inputs.daysInMonth
+              ? `Prorated to ${pay.paidDays} of ${pay.inputs.daysInMonth} paid days (${pay.inputs.sickDays} sick, ${pay.inputs.unfitDays} unfit to fly).`
+              : undefined
+          }
+        >
+          <AmountRow label="Salary" amount={pay.salaryLine.amount} />
+          <AmountRow label="Travel allowance" amount={pay.transportLine.amount} />
+          {pay.sickLine.amount > 0 && <AmountRow label="Sick pay" amount={pay.sickLine.amount} />}
         </Section>
 
         <Section title="Gross">
+          <AmountRow label="Salary" amount={pay.salaryLine.amount} />
+          <AmountRow label="Travel allowance" amount={pay.transportLine.amount} />
+          <AmountRow label="Sick pay" amount={pay.sickLine.amount} />
           <AmountRow label="Hour pay" amount={pay.hourPay} />
           <AmountRow label="Night" amount={pay.nightLine.amount} />
           <AmountRow label="Sectors" amount={pay.sectorPay} />
           <AmountRow label="Positioning" amount={pay.deadheadLine.amount} />
-          <AmountRow label="Base salary" amount={pay.baseSalary} />
-          <AmountRow label="Travel allowance" amount={pay.perDiem} />
           <SubtotalRow label="Total" amount={pay.gross} />
         </Section>
 
         <Section
           title="Deductions"
-          note="Each is taken from what the one above it left, not from the gross — the order matters."
+          note={`ОСМС and ОПВ are each ${percent(
+            scheme.osmsRate,
+          )} / ${percent(scheme.opvRate)} of the gross. ИПН is ${percent(
+            scheme.ipnRate,
+          )} of what they and the standard deduction (${formatMoney(scheme.ipnStandardDeduction)} ₸) leave.`}
         >
           <AmountRow label={`ОСМС ${percent(scheme.osmsRate)}`} amount={-pay.osms} />
           <AmountRow label={`ОПВ ${percent(scheme.opvRate)}`} amount={-pay.opv} />

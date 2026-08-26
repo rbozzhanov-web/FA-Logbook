@@ -109,29 +109,45 @@ The agreement is entirely configurable in Settings (`src/lib/pay/payScheme.ts` h
 defaults), because none of it is a fact about flying:
 
 - an hourly rate everything else is a multiple of;
-- **progressive hour bands** — the first 60 h at ×1, 61–80 at ×2, above 80 at ×2.5;
+- **progressive hour bands** — the first 60 h at ×1, 61–80 at ×2, above 80 at ×2.5. Paid as one
+  base line across every hour plus a top-up line per band above the first, mirroring how a
+  payslip itself prints "all hours" and then a separate surcharge line;
 - **progressive sector bands** — the first 15 unpaid, then 16–19 at ×3, 20–24 at ×4, 25–30 at ×5,
   above 30 at ×6. Positioning never reaches these: it is paid on its own line;
-- night at ×0.5, on either the contractual clock figure or the astronomical one;
+- night at ×0.5, by default counted as **exactly half the block hours** — the figure both a
+  spreadsheet estimate and a real payslip turned out to pay on — or switchable to the contractual
+  clock figure or the astronomical one;
 - positioning at ×0.5, by hours or by sectors;
-- fixed base salary and travel allowance;
-- **cascading deductions** — ОСМС, then ОПВ on what it left, then ИПН on what that left. Three
-  flat percentages of the gross would over-deduct by several thousand tenge.
+- **prorated** salary and travel allowance — full amounts cut down to the days actually worked
+  (calendar days minus certified sick and unfit-to-fly days), toggleable off for an agreement
+  that pays them in full regardless of attendance;
+- a **sick pay** line, paid per certified sick day at a daily rate you enter yourself. Kazakhstani
+  practice bases that rate on average earnings over the trailing 12 months, which can't be
+  reconstructed from the roster alone, so it defaults to 0 rather than a plausible-looking guess;
+- **ОСМС and ОПВ are each a flat percentage of the full gross**, not cascaded off one another —
+  confirmed against a real payslip, where treating them as cascading under-deducts by several
+  thousand tenge. Only **ИПН** is computed on what ОСМС, ОПВ, and a standard legal deduction (a
+  plain number, since it tracks the yearly минимальный расчётный показатель update) leave.
 
-`src/lib/pay/__tests__/calculatePay.test.ts` reproduces the source spreadsheet's own worked
-example to the tenge — 98.22 h, 49.11 night, 31 sectors, 3 deadhead → 824 775.5 gross and
-654 707 net — which is what pins every band, multiplier and deduction in place.
+`src/lib/pay/__tests__/calculatePay.test.ts` reproduces a real Air Astana cabin-crew payslip's own
+worked example to the tenge — 95.43 h, 20 sectors, 1.72 h positioning, 3 sick days and 1 unfit day
+of 31 → gross 840 071.82, net 678 312.64, all fifteen printed lines matching — which is what pins
+every band, multiplier and deduction in place. An earlier version of this module was checked
+against an informally kept spreadsheet instead (98.22 h → 824 775.5 gross, 654 707 net, still
+covered by its own test); the payslip superseded it as the authoritative source once a real one
+was available, correcting the deduction model (flat, not cascading) and adding proration and sick
+pay, which the spreadsheet didn't have to account for.
 
-Two deliberate departures from that sheet, both commented where they occur:
-
-- the top hour and sector bands run **open-ended** rather than stopping at 100 h and 38 sectors,
-  so a bigger month is still costed;
-- **ОСМС is 2%**. The sheet's own ОСМС cell reads 12000, but its ОПВ, ИПН and net figures are
-  only reachable from 2% (16 495.51); the three agree with each other and disagree with that one
-  cell.
+The top hour and sector bands run **open-ended** rather than stopping at the last printed band, so
+a bigger month is still costed.
 
 Hours are converted **exactly** from the minutes flown — 91:53 is 91.88 h, not 91.53. A
 spreadsheet with the roster's "91,53" typed straight into a decimal cell reads slightly lower.
+Note that block hours as this app derives them from the roster (matched to the minute against the
+roster's own printed Block Hours total) are not guaranteed to equal whatever hour figure a payroll
+system credits — some agreements pay scheduled rather than realised time, or give duty-period
+minimums — so the Pay tab's total is only as good as its block-hours input; check it against a
+real payslip for your own agreement before relying on it.
 
 Airport codes are stored exactly as the roster prints them (IATA: `ALA`, `NQZ`, `AYT`) and exactly
 as they are typed in. They are never rewritten to ICAO: this logbook is read against the airline's
@@ -143,7 +159,7 @@ code for its coordinates and timezone.
 ```bash
 npm install
 npm start          # Expo dev server
-npm test           # 156 tests
+npm test           # 162 tests
 npx tsc --noEmit   # typecheck
 ```
 
