@@ -122,7 +122,10 @@ jobs:
           PAYLOAD_DIR="$RUNNER_TEMP/Payload"
           mkdir -p "$PAYLOAD_DIR"
           cp -R "$app_path" "$PAYLOAD_DIR/"
-          IPA_NAME="PilotLogbook-unsigned.ipa"
+          # Named from the scheme Xcode actually built, not a hard-coded string: the app has been
+          # renamed once already, and a stale literal here silently ships an IPA labelled as a
+          # different app.
+          IPA_NAME="${{ steps.detect.outputs.scheme }}-unsigned.ipa"
           (cd "$RUNNER_TEMP" && zip -r -X -y "$IPA_NAME" "Payload")
           mkdir -p "$GITHUB_WORKSPACE/dist"
           mv "$RUNNER_TEMP/$IPA_NAME" "$GITHUB_WORKSPACE/dist/$IPA_NAME"
