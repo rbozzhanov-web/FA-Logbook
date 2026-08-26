@@ -18,6 +18,7 @@ import {
 } from '@/src/lib/backup/backupFile';
 import { mergeBackup, parseBackup } from '@/src/lib/backup/format';
 import { NightWindowField } from '@/src/components/NightWindowField';
+import { PaySchemeField } from '@/src/components/PaySchemeField';
 import { ScreenTitle } from '@/src/components/ScreenTitle';
 import {
   DEFAULT_NIGHT_WINDOW,
@@ -27,7 +28,8 @@ import {
 } from '@/src/lib/daynight/nightWindow';
 import { timezoneSupportAvailable } from '@/src/lib/daynight/localTime';
 import { confirm, notify } from '@/src/lib/dialogs';
-import { readNightWindow, writeNightWindow } from '@/src/lib/settings';
+import { DEFAULT_PAY_SCHEME, PayScheme } from '@/src/lib/pay/payScheme';
+import { readNightWindow, readPayScheme, writeNightWindow, writePayScheme } from '@/src/lib/settings';
 import { AppColors, useAppTheme } from '@/src/theme';
 
 interface ImportBatch {
@@ -44,6 +46,7 @@ export default function SettingsScreen() {
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [backupStatus, setBackupStatus] = useState(readBackupStatus);
   const [nightWindow, setNightWindow] = useState<NightWindow>(DEFAULT_NIGHT_WINDOW);
+  const [payScheme, setPayScheme] = useState<PayScheme>(DEFAULT_PAY_SCHEME);
   const [busy, setBusy] = useState<Busy>(undefined);
 
   // Checked once, at the top of the screen it would affect: without IANA timezone support the
@@ -54,6 +57,7 @@ export default function SettingsScreen() {
   const reload = useCallback(() => {
     listImportBatches().then(setBatches);
     readNightWindow().then(setNightWindow);
+    readPayScheme().then(setPayScheme);
     setBackupStatus(readBackupStatus());
   }, []);
 
@@ -62,6 +66,11 @@ export default function SettingsScreen() {
   const changeNightWindow = async (window: NightWindow) => {
     setNightWindow(window);
     await writeNightWindow(window);
+  };
+
+  const changePayScheme = async (scheme: PayScheme) => {
+    setPayScheme(scheme);
+    await writePayScheme(scheme);
   };
 
   const confirmUndo = async (batch: ImportBatch) => {
@@ -189,6 +198,14 @@ export default function SettingsScreen() {
               you set it here. It is currently {describeNightWindow(nightWindow)}.
             </Text>
             <NightWindowField value={nightWindow} onChange={changeNightWindow} />
+
+            <Text style={[styles.sectionTitle, styles.laterSection]}>Pay</Text>
+            <Text style={styles.hint}>
+              The agreement the Pay tab computes against. Every term here is a clause of a
+              contract rather than a fact about flying, so all of it is editable — the rate, the
+              bands, the multipliers and the deductions.
+            </Text>
+            <PaySchemeField value={payScheme} onChange={changePayScheme} />
 
             <Text style={[styles.sectionTitle, styles.laterSection]}>Backup &amp; export</Text>
             <Text style={styles.hint}>{backupHint}</Text>

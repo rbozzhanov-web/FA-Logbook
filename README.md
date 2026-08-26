@@ -99,6 +99,40 @@ one-line change there.
 Only *operating* block hours count toward the bands — deadhead and ground duty are excluded,
 matching the airline's own arithmetic.
 
+## Pay
+
+The Pay tab works a month's pay out from the logbook, laid out line for line the way a crew pay
+spreadsheet lays it out — quantity, multiplier, amount — because the figure gets checked against
+a payslip, and when it disagrees the useful question is *which line*.
+
+The agreement is entirely configurable in Settings (`src/lib/pay/payScheme.ts` holds the
+defaults), because none of it is a fact about flying:
+
+- an hourly rate everything else is a multiple of;
+- **progressive hour bands** — the first 60 h at ×1, 61–80 at ×2, above 80 at ×2.5;
+- **progressive sector bands** — the first 15 unpaid, then 16–19 at ×3, 20–24 at ×4, 25–30 at ×5,
+  above 30 at ×6. Positioning never reaches these: it is paid on its own line;
+- night at ×0.5, on either the contractual clock figure or the astronomical one;
+- positioning at ×0.5, by hours or by sectors;
+- fixed base salary and travel allowance;
+- **cascading deductions** — ОСМС, then ОПВ on what it left, then ИПН on what that left. Three
+  flat percentages of the gross would over-deduct by several thousand tenge.
+
+`src/lib/pay/__tests__/calculatePay.test.ts` reproduces the source spreadsheet's own worked
+example to the tenge — 98.22 h, 49.11 night, 31 sectors, 3 deadhead → 824 775.5 gross and
+654 707 net — which is what pins every band, multiplier and deduction in place.
+
+Two deliberate departures from that sheet, both commented where they occur:
+
+- the top hour and sector bands run **open-ended** rather than stopping at 100 h and 38 sectors,
+  so a bigger month is still costed;
+- **ОСМС is 2%**. The sheet's own ОСМС cell reads 12000, but its ОПВ, ИПН and net figures are
+  only reachable from 2% (16 495.51); the three agree with each other and disagree with that one
+  cell.
+
+Hours are converted **exactly** from the minutes flown — 91:53 is 91.88 h, not 91.53. A
+spreadsheet with the roster's "91,53" typed straight into a decimal cell reads slightly lower.
+
 Airport codes are stored exactly as the roster prints them (IATA: `ALA`, `NQZ`, `AYT`) and exactly
 as they are typed in. They are never rewritten to ICAO: this logbook is read against the airline's
 own roster, not filed with a licensing authority. The airport database is used only to *look up* a
@@ -109,7 +143,7 @@ code for its coordinates and timezone.
 ```bash
 npm install
 npm start          # Expo dev server
-npm test           # 132 tests
+npm test           # 156 tests
 npx tsc --noEmit   # typecheck
 ```
 
@@ -136,6 +170,7 @@ src/lib/pdfImport/crewSchedule/   reading the roster: grid → duties → sector
 src/lib/daynight/                 timezones, sun position, both night calculations
 src/lib/summary.ts                every total the app reports, from the entries themselves
 src/lib/monthlyTotals.ts          the per-month breakdown and the 60h/80h band split
+src/lib/pay/                      the pay agreement and the payslip calculation
 src/db/                           SQLite via Drizzle, with a localStorage twin for web
 app/                              expo-router screens
 ```

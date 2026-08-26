@@ -27,6 +27,10 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon sf="sum" />
         <NativeTabs.Trigger.Label>Totals</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="pay">
+        <NativeTabs.Trigger.Icon sf={{ default: 'banknote', selected: 'banknote.fill' }} />
+        <NativeTabs.Trigger.Label>Pay</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <NativeTabs.Trigger.Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} />
         <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
