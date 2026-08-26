@@ -169,7 +169,7 @@ code for its coordinates and timezone.
 ```bash
 npm install
 npm start          # Expo dev server
-npm test           # 167 tests
+npm test           # 178 tests
 npx tsc --noEmit   # typecheck
 ```
 

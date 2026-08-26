@@ -23,19 +23,18 @@ export const entryFormSchema = z
     kind: z.enum(['operating', 'deadhead', 'ground', 'absence']),
     flightNumber: z.string().trim(),
     // 3 or 4 letters covers IATA and ICAO alike. Whichever is entered is what gets stored —
-    // the code is never rewritten from one to the other.
+    // the code is never rewritten from one to the other. Empty is allowed here and required
+    // below except for an absence, which has no station that matters to anything downstream.
     departureAirport: z
       .string()
       .trim()
-      .min(3, 'Required')
       .max(4)
-      .regex(/^[A-Za-z]{3,4}$/, '3-4 letters'),
+      .regex(/^([A-Za-z]{3,4})?$/, '3-4 letters'),
     arrivalAirport: z
       .string()
       .trim()
-      .min(3, 'Required')
       .max(4)
-      .regex(/^[A-Za-z]{3,4}$/, '3-4 letters'),
+      .regex(/^([A-Za-z]{3,4})?$/, '3-4 letters'),
     aircraftType: z.string().trim(),
     timeOut: optionalTime,
     timeIn: optionalTime,
@@ -56,6 +55,12 @@ export const entryFormSchema = z
     otherCrewNames: z.string().trim(),
     remarks: z.string().trim(),
   })
+  .refine(
+    // A sector or a ground duty is logged against a station; an absence isn't — it's logged for
+    // the day alone, and its dutyCode (SICK/UFF) carries no station of its own.
+    (values) => values.kind === 'absence' || (values.departureAirport !== '' && values.arrivalAirport !== ''),
+    { message: 'Required', path: ['departureAirport'] },
+  )
   .refine(
     (values) => {
       // An absence is the one entry with nothing to total: it is logged for the day it covers,

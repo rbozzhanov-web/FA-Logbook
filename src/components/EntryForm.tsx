@@ -28,6 +28,16 @@ const KIND_OPTIONS: { value: SectorKind; label: string; hint: string }[] = [
   { value: 'operating', label: 'Operating', hint: 'Worked the sector as crew. Counts as block time.' },
   { value: 'deadhead', label: 'Deadhead', hint: 'Travelled as a passenger to position. Counted apart from block time.' },
   { value: 'ground', label: 'Ground duty', hint: 'Training, a briefing, a course — duty hours with no flying.' },
+  {
+    value: 'absence',
+    label: 'Absence',
+    hint: 'Certified sick leave or being stood down as unfit to fly. No hours — just logged for the day.',
+  },
+];
+
+const ABSENCE_CODE_OPTIONS: { value: 'SICK' | 'UFF'; label: string }[] = [
+  { value: 'SICK', label: 'Sick leave' },
+  { value: 'UFF', label: 'Unfit to fly' },
 ];
 
 export function EntryForm({ initialValues, onSubmit, onDelete, submitLabel = 'Save' }: EntryFormProps) {
@@ -45,6 +55,7 @@ export function EntryForm({ initialValues, onSubmit, onDelete, submitLabel = 'Sa
   });
 
   const kind = useWatch({ control, name: 'kind' });
+  const dutyCode = useWatch({ control, name: 'dutyCode' });
   const [computeNote, setComputeNote] = useState<string>();
   // Loaded once per form: the names come from the logbook itself, so they only change when an
   // entry is saved — by which point this form is closing.
@@ -103,6 +114,7 @@ export function EntryForm({ initialValues, onSubmit, onDelete, submitLabel = 'Sa
   });
 
   const isGround = kind === 'ground';
+  const isAbsence = kind === 'absence';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -133,9 +145,9 @@ export function EntryForm({ initialValues, onSubmit, onDelete, submitLabel = 'Sa
         />
       </Section>
 
-      <Section title={isGround ? 'Duty' : 'Sector'}>
+      <Section title={isGround ? 'Duty' : isAbsence ? 'Absence' : 'Sector'}>
         <DateField control={control} name="date" label="Date (local at departure)" error={errors.date?.message} />
-        {!isGround && (
+        {!isGround && !isAbsence && (
           <TextField control={control} name="flightNumber" label="Flight number" autoCapitalize="characters" />
         )}
         {isGround && (
@@ -147,102 +159,127 @@ export function EntryForm({ initialValues, onSubmit, onDelete, submitLabel = 'Sa
             autoCapitalize="characters"
           />
         )}
-        <View style={styles.row}>
-          <TextField
-            control={control}
-            name="departureAirport"
-            label={isGround ? 'Station' : 'From'}
-            autoCapitalize="characters"
-            maxLength={4}
-            style={styles.half}
-            error={errors.departureAirport?.message}
-          />
-          <TextField
-            control={control}
-            name="arrivalAirport"
-            label={isGround ? 'Station' : 'To'}
-            autoCapitalize="characters"
-            maxLength={4}
-            style={styles.half}
-            error={errors.arrivalAirport?.message}
-          />
-        </View>
-        <Text style={styles.hint}>
-          Station codes are kept exactly as you enter them — the same codes your roster uses.
-        </Text>
-        {!isGround && <TextField control={control} name="aircraftType" label="Aircraft type" placeholder="321, 763…" />}
-      </Section>
-
-      <Section title={isGround ? 'Hours' : 'Times (local at each station)'}>
-        <View style={styles.row}>
-          <TextField control={control} name="timeOut" label={isGround ? 'Start' : 'Out'} placeholder="HH:MM" style={styles.half} />
-          <TextField control={control} name="timeIn" label={isGround ? 'End' : 'In'} placeholder="HH:MM" style={styles.half} />
-        </View>
-
-        {isGround ? (
-          <TextField
-            control={control}
-            name="groundDutyTime"
-            label="Duty time"
-            placeholder="HH:MM"
-            error={errors.blockTime?.message}
-          />
-        ) : (
+        {isAbsence && (
+          <View style={styles.segmented}>
+            {ABSENCE_CODE_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[styles.segment, dutyCode === option.value && styles.segmentActive]}
+                onPress={() => setValue('dutyCode', option.value, { shouldDirty: true, shouldValidate: true })}
+              >
+                <Text style={[styles.segmentText, dutyCode === option.value && styles.segmentTextActive]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        {!isAbsence && (
           <>
-            <DateField
-              control={control}
-              name="arrivalDate"
-              label="Arrival date (only if it lands on another day)"
-              error={errors.arrivalDate?.message}
-            />
             <View style={styles.row}>
               <TextField
                 control={control}
-                name={kind === 'deadhead' ? 'deadheadTime' : 'blockTime'}
-                label={kind === 'deadhead' ? 'Deadhead time' : 'Block time'}
-                placeholder="HH:MM"
+                name="departureAirport"
+                label={isGround ? 'Station' : 'From'}
+                autoCapitalize="characters"
+                maxLength={4}
                 style={styles.half}
-                error={errors.blockTime?.message}
+                error={errors.departureAirport?.message}
               />
-              <TextField control={control} name="position" label="Rank operated" placeholder="FJ, PU…" autoCapitalize="characters" style={styles.half} />
-            </View>
-
-            <Pressable style={styles.recalcButton} onPress={recompute}>
-              <Text style={styles.recalcButtonText}>Compute block time, day &amp; night</Text>
-            </Pressable>
-            {computeNote && <Text style={styles.hint}>{computeNote}</Text>}
-
-            <View style={[styles.row, styles.spacedRow]}>
-              <TextField control={control} name="dayTime" label="Day" placeholder="HH:MM" style={styles.half} />
               <TextField
                 control={control}
-                name="nightTime"
-                label="Night"
-                placeholder="HH:MM"
+                name="arrivalAirport"
+                label={isGround ? 'Station' : 'To'}
+                autoCapitalize="characters"
+                maxLength={4}
                 style={styles.half}
-                error={errors.nightTime?.message}
+                error={errors.arrivalAirport?.message}
               />
             </View>
+            <Text style={styles.hint}>
+              Station codes are kept exactly as you enter them — the same codes your roster uses.
+            </Text>
+            {!isGround && (
+              <TextField control={control} name="aircraftType" label="Aircraft type" placeholder="321, 763…" />
+            )}
           </>
         )}
       </Section>
 
-      <Section title="Duty period">
-        <View style={styles.row}>
-          <DateField control={control} name="dutyStartDate" label="Report date" error={errors.dutyStartDate?.message} />
-          <TextField control={control} name="dutyStartTime" label="Report time" placeholder="HH:MM" style={styles.half} />
-        </View>
-        <View style={styles.row}>
-          <DateField control={control} name="dutyEndDate" label="Release date" error={errors.dutyEndDate?.message} />
-          <TextField control={control} name="dutyEndTime" label="Release time" placeholder="HH:MM" style={styles.half} />
-        </View>
-        <Text style={styles.hint}>
-          Duty hours are counted once per duty, so a multi-sector day is not totalled several times
-          over. Give every sector of the same duty the same report and release times.
-        </Text>
-      </Section>
+      {!isAbsence && (
+        <Section title={isGround ? 'Hours' : 'Times (local at each station)'}>
+          <View style={styles.row}>
+            <TextField control={control} name="timeOut" label={isGround ? 'Start' : 'Out'} placeholder="HH:MM" style={styles.half} />
+            <TextField control={control} name="timeIn" label={isGround ? 'End' : 'In'} placeholder="HH:MM" style={styles.half} />
+          </View>
 
-      {!isGround && (
+          {isGround ? (
+            <TextField
+              control={control}
+              name="groundDutyTime"
+              label="Duty time"
+              placeholder="HH:MM"
+              error={errors.blockTime?.message}
+            />
+          ) : (
+            <>
+              <DateField
+                control={control}
+                name="arrivalDate"
+                label="Arrival date (only if it lands on another day)"
+                error={errors.arrivalDate?.message}
+              />
+              <View style={styles.row}>
+                <TextField
+                  control={control}
+                  name={kind === 'deadhead' ? 'deadheadTime' : 'blockTime'}
+                  label={kind === 'deadhead' ? 'Deadhead time' : 'Block time'}
+                  placeholder="HH:MM"
+                  style={styles.half}
+                  error={errors.blockTime?.message}
+                />
+                <TextField control={control} name="position" label="Rank operated" placeholder="FJ, PU…" autoCapitalize="characters" style={styles.half} />
+              </View>
+
+              <Pressable style={styles.recalcButton} onPress={recompute}>
+                <Text style={styles.recalcButtonText}>Compute block time, day &amp; night</Text>
+              </Pressable>
+              {computeNote && <Text style={styles.hint}>{computeNote}</Text>}
+
+              <View style={[styles.row, styles.spacedRow]}>
+                <TextField control={control} name="dayTime" label="Day" placeholder="HH:MM" style={styles.half} />
+                <TextField
+                  control={control}
+                  name="nightTime"
+                  label="Night"
+                  placeholder="HH:MM"
+                  style={styles.half}
+                  error={errors.nightTime?.message}
+                />
+              </View>
+            </>
+          )}
+        </Section>
+      )}
+
+      {!isAbsence && (
+        <Section title="Duty period">
+          <View style={styles.row}>
+            <DateField control={control} name="dutyStartDate" label="Report date" error={errors.dutyStartDate?.message} />
+            <TextField control={control} name="dutyStartTime" label="Report time" placeholder="HH:MM" style={styles.half} />
+          </View>
+          <View style={styles.row}>
+            <DateField control={control} name="dutyEndDate" label="Release date" error={errors.dutyEndDate?.message} />
+            <TextField control={control} name="dutyEndTime" label="Release time" placeholder="HH:MM" style={styles.half} />
+          </View>
+          <Text style={styles.hint}>
+            Duty hours are counted once per duty, so a multi-sector day is not totalled several times
+            over. Give every sector of the same duty the same report and release times.
+          </Text>
+        </Section>
+      )}
+
+      {!isGround && !isAbsence && (
         <Section title="Crew &amp; remarks">
           <CrewNameField control={control} name="captainName" label="Captain" suggestions={crewNames} />
           <CrewNameField control={control} name="purserName" label="Purser" suggestions={crewNames} />
@@ -251,7 +288,7 @@ export function EntryForm({ initialValues, onSubmit, onDelete, submitLabel = 'Sa
         </Section>
       )}
 
-      {isGround && (
+      {(isGround || isAbsence) && (
         <Section title="Remarks">
           <TextField control={control} name="remarks" label="Remarks" multiline />
         </Section>

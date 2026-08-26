@@ -3,26 +3,11 @@ import { useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { NewLogEntry, createEntries } from '@/src/db/queries/entries';
+import { hasNoHours, missingRequiredFields } from '@/src/lib/pdfImport/candidateCompleteness';
 import { minutesToHHMM } from '@/src/lib/time';
-import { CabinCrewLogEntry } from '@/src/types/logbook';
 import { useImportDraftStore } from '@/src/store/importDraft';
 import { AppColors, useAppTheme } from '@/src/theme';
 import { v4 as uuidv4 } from 'uuid';
-
-const REQUIRED_FIELDS = ['date', 'departureAirport', 'arrivalAirport'] as const;
-
-function missingRequiredFields(fields: Partial<CabinCrewLogEntry>): string[] {
-  return REQUIRED_FIELDS.filter((field) => fields[field] === undefined || fields[field] === '');
-}
-
-/** A row with no hours at all is not a logbook entry, whichever column those hours belong in. */
-function hasNoHours(fields: Partial<CabinCrewLogEntry>): boolean {
-  return (
-    (fields.blockMinutes ?? 0) === 0 &&
-    (fields.deadheadMinutes ?? 0) === 0 &&
-    (fields.groundDutyMinutes ?? 0) === 0
-  );
-}
 
 export default function ImportReviewScreen() {
   const router = useRouter();
@@ -134,6 +119,7 @@ export default function ImportReviewScreen() {
         renderItem={({ item: candidate, index }) => {
           const fields = candidate.fields;
           const isGround = fields.kind === 'ground';
+          const isAbsence = fields.kind === 'absence';
           const minutes =
             (fields.blockMinutes ?? 0) + (fields.deadheadMinutes ?? 0) + (fields.groundDutyMinutes ?? 0);
 
@@ -141,8 +127,8 @@ export default function ImportReviewScreen() {
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Text style={styles.route}>
-                  {isGround
-                    ? fields.dutyCode ?? 'Ground duty'
+                  {isGround || isAbsence
+                    ? (fields.dutyCode ?? (isAbsence ? 'Absence' : 'Ground duty'))
                     : `${fields.departureAirport ?? '?'} → ${fields.arrivalAirport ?? '?'}`}
                 </Text>
                 <Switch
