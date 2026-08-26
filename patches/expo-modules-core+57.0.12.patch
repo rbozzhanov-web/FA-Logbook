@@ -1,0 +1,26 @@
+diff --git a/node_modules/expo-modules-core/android/src/main/cpp/worklets/WorkletJSCallInvoker.cpp b/node_modules/expo-modules-core/android/src/main/cpp/worklets/WorkletJSCallInvoker.cpp
+index a2d707c..0a69a24 100644
+--- a/node_modules/expo-modules-core/android/src/main/cpp/worklets/WorkletJSCallInvoker.cpp
++++ b/node_modules/expo-modules-core/android/src/main/cpp/worklets/WorkletJSCallInvoker.cpp
+@@ -24,7 +24,7 @@ namespace expo {
+       return;
+     }
+ 
+-    workletRuntime->executeSync([func = std::move(func)](jsi::Runtime &rt) -> jsi::Value {
++    workletRuntime->runSync([func = std::move(func)](jsi::Runtime &rt) -> jsi::Value {
+       func(rt);
+       return jsi::Value::undefined();
+     });
+diff --git a/node_modules/expo-modules-core/ios/WorkletsAdapter/ExpoWorkletsBridgeProvider.mm b/node_modules/expo-modules-core/ios/WorkletsAdapter/ExpoWorkletsBridgeProvider.mm
+index 126545f..d97163a 100644
+--- a/node_modules/expo-modules-core/ios/WorkletsAdapter/ExpoWorkletsBridgeProvider.mm
++++ b/node_modules/expo-modules-core/ios/WorkletsAdapter/ExpoWorkletsBridgeProvider.mm
+@@ -233,7 +233,7 @@ static jsi::Value callWorklet(jsi::Runtime &rt, std::shared_ptr<worklets::Serial
+     return;
+   }
+ 
+-  workletRuntime->executeSync([worklet, arguments](jsi::Runtime &rt) -> jsi::Value {
++  workletRuntime->runSync([worklet, arguments](jsi::Runtime &rt) -> jsi::Value {
+     return callWorklet(rt, worklet, arguments);
+   });
+ }

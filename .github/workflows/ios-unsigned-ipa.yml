@@ -1,0 +1,135 @@
+name: Build Unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.4.1'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Prebuild iOS native project (Continuous Native Generation)
+        run: npx expo prebuild --platform ios --clean --no-install
+        env:
+          CI: '1'
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: |
+          gem list bundler -i || gem install bundler
+          pod install --repo-update
+
+      - name: Clamp Pod deployment targets (works around expo-updates/ReachabilitySwift SDK 57 issue)
+        working-directory: ios
+        run: |
+          ruby -e '
+            require "xcodeproj"
+            project = Xcodeproj::Project.open("Pods/Pods.xcodeproj")
+            min_target = "16.4"
+            project.targets.each do |target|
+              target.build_configurations.each do |config|
+                current = config.build_settings["IPHONEOS_DEPLOYMENT_TARGET"]
+                if current && Gem::Version.new(current) < Gem::Version.new(min_target)
+                  config.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = min_target
+                end
+              end
+            end
+            project.save
+          '
+
+      - name: Detect workspace and scheme
+        id: detect
+        working-directory: ios
+        run: |
+          WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -n1 | sed 's|^\./||')
+          if [ -z "$WORKSPACE" ]; then
+            echo "No .xcworkspace found" >&2
+            exit 1
+          fi
+          WORKSPACE_BASENAME=$(basename "$WORKSPACE" .xcworkspace)
+          SCHEME=$(xcodebuild -list -json -workspace "$WORKSPACE" | python3 -c "import json,sys; target=sys.argv[1]; schemes=json.load(sys.stdin)['workspace']['schemes']; print(target if target in schemes else next(s for s in schemes if s != 'Pods'))" "$WORKSPACE_BASENAME")
+          echo "workspace=$WORKSPACE" >> "$GITHUB_OUTPUT"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "Detected workspace: $WORKSPACE"
+          echo "Detected scheme: $SCHEME"
+
+      - name: Archive (unsigned, device target)
+        working-directory: ios
+        run: |
+          xcodebuild archive \
+            -workspace "${{ steps.detect.outputs.workspace }}" \
+            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/build/App.xcarchive" \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+          test -d "$RUNNER_TEMP/build/App.xcarchive/Products/Applications"
+
+      - name: Strip any stray embedded provisioning profile
+        run: |
+          APP_PATH=$(find "$RUNNER_TEMP/build/App.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" | head -n1)
+          echo "app_path=$APP_PATH" >> "$GITHUB_ENV"
+          rm -f "$APP_PATH/embedded.mobileprovision"
+
+      # A .app can archive successfully while still being unrunnable, which is invisible until it
+      # white-screens on a device. Both checks below are for failures we've actually shipped.
+      - name: Verify the app bundle is actually runnable
+        run: |
+          test -f "$app_path/main.jsbundle" || {
+            echo "::error::main.jsbundle missing — the React Native bundling phase did not run."
+            exit 1
+          }
+
+          # node_modules JS must be compiled into main.jsbundle, never emitted as standalone files.
+          # A stray .mjs here means Metro treated a real ESM dependency as an opaque asset, so its
+          # imports resolve to asset handles instead of modules (this shipped once already: it made
+          # expo's whatwg-url-minimum-backed URL global undefined and blanked the app at startup).
+          STRAY=$(find "$app_path" -path "*/assets/node_modules/*" -name "*.mjs")
+          if [ -n "$STRAY" ]; then
+            echo "::error::node_modules ESM shipped as assets instead of being bundled:"
+            echo "$STRAY"
+            exit 1
+          fi
+
+      - name: Package IPA
+        run: |
+          PAYLOAD_DIR="$RUNNER_TEMP/Payload"
+          mkdir -p "$PAYLOAD_DIR"
+          cp -R "$app_path" "$PAYLOAD_DIR/"
+          IPA_NAME="PilotLogbook-unsigned.ipa"
+          (cd "$RUNNER_TEMP" && zip -r -X -y "$IPA_NAME" "Payload")
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          mv "$RUNNER_TEMP/$IPA_NAME" "$GITHUB_WORKSPACE/dist/$IPA_NAME"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fa-logbook-unsigned-ipa
+          path: dist/*.ipa
+          retention-days: 14
