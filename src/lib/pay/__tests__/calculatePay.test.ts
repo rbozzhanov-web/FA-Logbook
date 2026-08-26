@@ -181,6 +181,9 @@ function month(overrides: Partial<MonthTotals> = {}): MonthTotals {
     sectorCount: 0,
     deadheadCount: 0,
     blockMinutes: 0,
+    // Mirrors blockMinutes by default so tests that don't care about the norm/actual distinction
+    // don't have to set both; tests that do care override normBlockMinutes explicitly.
+    normBlockMinutes: overrides.blockMinutes ?? 0,
     bands: { baseMinutes: 0, midMinutes: 0, highMinutes: 0 },
     band: 'under',
     deadheadMinutes: 0,
@@ -230,6 +233,16 @@ describe('feeding a month of the logbook into the scheme', () => {
       { ...DEFAULT_PAY_SCHEME, nightBasis: 'actual' },
     );
     expect(actual.inputs.nightHours).toBeCloseTo(34.4667, 4);
+  });
+
+  it('defaults to the published CrewPay norm hours, falling back to the scheme’s "actual" setting', () => {
+    const fixture = month({ blockMinutes: 80 * 60, normBlockMinutes: 95 * 60 });
+
+    const norm = calculateMonthPay(fixture, DEFAULT_PAY_SCHEME);
+    expect(norm.inputs.blockHours).toBe(95);
+
+    const actual = calculateMonthPay(fixture, { ...DEFAULT_PAY_SCHEME, blockHoursBasis: 'actual' });
+    expect(actual.inputs.blockHours).toBe(80);
   });
 
   it('pays deadhead by sectors when the scheme says so', () => {

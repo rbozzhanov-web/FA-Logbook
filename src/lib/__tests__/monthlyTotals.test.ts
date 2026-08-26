@@ -201,6 +201,42 @@ describe('the monthly breakdown', () => {
     expect(months[0].key).toBe('2026-07');
   });
 
+  it('counts a listed route at its published CrewPay Norm time when the date is in season', () => {
+    // ALA-NQZ is 1:55 (115 min) in the published table, effective 2025-10-01–2026-03-31.
+    const months = monthlyTotals([
+      entry({ date: '2025-12-01', departureAirport: 'ALA', arrivalAirport: 'NQZ', blockMinutes: 100 }),
+    ]);
+
+    expect(months[0].blockMinutes).toBe(100);
+    expect(months[0].normBlockMinutes).toBe(115);
+  });
+
+  it('falls back to actual time for a route the norm table does not list', () => {
+    const months = monthlyTotals([
+      entry({ date: '2025-12-01', departureAirport: 'ZZZ', arrivalAirport: 'ZZZ', blockMinutes: 100 }),
+    ]);
+
+    expect(months[0].normBlockMinutes).toBe(100);
+  });
+
+  it('falls back to actual time for a listed route outside the table’s effective dates', () => {
+    // Same ALA-NQZ pair as above, but flown after the table's 2026-03-31 cutoff.
+    const months = monthlyTotals([
+      entry({ date: '2026-07-14', departureAirport: 'ALA', arrivalAirport: 'NQZ', blockMinutes: 100 }),
+    ]);
+
+    expect(months[0].normBlockMinutes).toBe(100);
+  });
+
+  it('never lets the norm figure affect the bands, which stay on actual time', () => {
+    const months = monthlyTotals([
+      entry({ date: '2025-12-01', departureAirport: 'ALA', arrivalAirport: 'NQZ', blockMinutes: 100 }),
+    ]);
+
+    expect(months[0].band).toBe('under');
+    expect(months[0].bands.baseMinutes).toBe(100);
+  });
+
   it('recomputes the contractual night figure per month when a window is given', () => {
     const months = monthlyTotals(
       [

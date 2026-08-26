@@ -92,7 +92,11 @@ export default function PayScreen() {
           title="Hours"
           note={`${formatHours(pay.inputs.blockHours)} h of operating block time, at ${formatMoney(
             scheme.hourlyRate,
-          )} ₸ an hour.`}
+          )} ₸ an hour.${
+            scheme.blockHoursBasis === 'norm'
+              ? ' Counted from the published CrewPay norm where a route is listed, actual time otherwise.'
+              : ' Counted from actual time flown.'
+          }`}
         >
           <LineRow line={pay.hourBaseLine} unit="h" rate={scheme.hourlyRate} />
           {pay.hourSurchargeLines.map((line) => (

@@ -1,4 +1,5 @@
 import { NightWindow } from '@/src/lib/daynight/nightWindow';
+import { crewPayNormCoversDate, findCrewPayNormMinutes } from '@/src/lib/pay/crewPayNorm';
 import { CabinCrewLogEntry, isSickLeave, isUnfitToFly } from '@/src/types/logbook';
 import { entryDutyMinutes, isFirstSectorOfDuty, windowNightFor } from './summary';
 
@@ -63,6 +64,12 @@ export interface MonthTotals {
 
   /** Operating block time — the figure the bands are computed from. */
   blockMinutes: number;
+  /**
+   * The same sectors, each counted at the airline's published CrewPay Norm block time where its
+   * route is listed and its date falls in that table's effective window, and at its own actual
+   * `blockMinutes` otherwise — the figure the Pay tab defaults to. Never affects the bands above.
+   */
+  normBlockMinutes: number;
   bands: BandSplit;
   band: BandReached;
 
@@ -102,6 +109,7 @@ function emptyMonth(key: string): MonthTotals {
     sectorCount: 0,
     deadheadCount: 0,
     blockMinutes: 0,
+    normBlockMinutes: 0,
     bands: { baseMinutes: 0, midMinutes: 0, highMinutes: 0 },
     band: 'under',
     deadheadMinutes: 0,
@@ -143,6 +151,10 @@ export function monthlyTotals(
     if (entry.kind === 'operating') {
       month.sectorCount += 1;
       month.blockMinutes += entry.blockMinutes;
+      const norm = crewPayNormCoversDate(entry.date)
+        ? findCrewPayNormMinutes(entry.departureAirport, entry.arrivalAirport)
+        : undefined;
+      month.normBlockMinutes += norm ?? entry.blockMinutes;
       month.nightMinutes += entry.nightMinutes;
       if (window) month.windowNightMinutes += windowNightFor(entry, window);
     } else if (entry.kind === 'deadhead') {

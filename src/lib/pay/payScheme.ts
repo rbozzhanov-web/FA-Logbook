@@ -30,6 +30,16 @@ export interface PayTier {
 /** Which of the app's night figures the pay calculation is fed. */
 export type NightBasis = 'halfBlock' | 'contractual' | 'actual';
 
+/**
+ * Which figure block-hour pay is worked out from: the airline's published CrewPay Norm block
+ * time per route, or the roster's own actual operated time.
+ *
+ * The per-sector fallback to actual — for a route the norm table doesn't list, or a date outside
+ * the table's own effective window — happens in `monthlyTotals()`, not here: this field only
+ * picks between the two month totals it already computed (`blockMinutes`/`normBlockMinutes`).
+ */
+export type BlockHoursBasis = 'norm' | 'actual';
+
 /** Whether positioning is paid by the hours flown or by the number of sectors. */
 export type DeadheadBasis = 'hours' | 'sectors';
 
@@ -48,6 +58,8 @@ export interface PayScheme {
   monthlyTransport: number;
   proratesFixedPayByAbsence: boolean;
 
+  /** Which figure the hour bands below are computed from. */
+  blockHoursBasis: BlockHoursBasis;
   /** Block-hour bands. Only operating hours reach these — positioning is paid separately. */
   hourTiers: PayTier[];
   /**
@@ -95,6 +107,8 @@ export const DEFAULT_PAY_SCHEME: PayScheme = {
   monthlySalary: 164317,
   monthlyTransport: 78000,
   proratesFixedPayByAbsence: true,
+
+  blockHoursBasis: 'norm',
 
   hourTiers: [
     { upTo: 60, multiplier: 1 },

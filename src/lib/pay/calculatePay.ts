@@ -272,7 +272,8 @@ export function calculatePay(inputs: PayInputs, scheme: PayScheme): PayCalculati
  * cell, which is a different, and wrong, number.
  */
 export function payInputsForMonth(month: MonthTotals, scheme: PayScheme): PayInputs {
-  const blockHours = month.blockMinutes / 60;
+  const blockMinutes = scheme.blockHoursBasis === 'norm' ? month.normBlockMinutes : month.blockMinutes;
+  const blockHours = blockMinutes / 60;
 
   const nightHours =
     scheme.nightBasis === 'halfBlock'

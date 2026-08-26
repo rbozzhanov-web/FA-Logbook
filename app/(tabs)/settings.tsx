@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useDataRefresh } from '@/src/db/dataVersion';
 import {
@@ -43,6 +44,7 @@ type Busy = 'export' | 'pdf' | 'restore' | 'replace' | undefined;
 export default function SettingsScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [backupStatus, setBackupStatus] = useState(readBackupStatus);
   const [nightWindow, setNightWindow] = useState<NightWindow>(DEFAULT_NIGHT_WINDOW);
@@ -175,7 +177,8 @@ export default function SettingsScreen() {
       <ScreenTitle title="Settings" />
       <FlatList
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 16 }]}
+        keyboardShouldPersistTaps="handled"
         data={batches}
         keyExtractor={(item) => item.importBatchId}
         ListHeaderComponent={

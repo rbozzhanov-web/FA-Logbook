@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { formatMoney } from '@/src/lib/pay/format';
-import { DeadheadBasis, NightBasis, PayScheme, PayTier, describeTier } from '@/src/lib/pay/payScheme';
+import {
+  BlockHoursBasis,
+  DeadheadBasis,
+  NightBasis,
+  PayScheme,
+  PayTier,
+  describeTier,
+} from '@/src/lib/pay/payScheme';
 import { AppColors, useAppTheme } from '@/src/theme';
 
 interface PaySchemeFieldProps {
@@ -59,6 +66,20 @@ export function PaySchemeField({ value, onChange }: PaySchemeFieldProps) {
         Kazakhstani practice bases this on average earnings over the trailing 12 months, which
         can't be reconstructed from the roster alone — enter your own real rate here. Left at 0,
         sick days are unpaid.
+      </Text>
+
+      <Text style={styles.groupTitle}>Hours</Text>
+      <Segmented<BlockHoursBasis>
+        options={[
+          { value: 'norm', label: 'CrewPay norm' },
+          { value: 'actual', label: 'Actual (roster)' },
+        ]}
+        selected={value.blockHoursBasis}
+        onSelect={(blockHoursBasis) => onChange({ ...value, blockHoursBasis })}
+      />
+      <Text style={styles.hint}>
+        Falls back to the actual time flown for any route the published table doesn't cover, or
+        outside its effective dates.
       </Text>
 
       <TierEditor

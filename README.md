@@ -127,7 +127,17 @@ defaults), because none of it is a fact about flying:
 - **ОСМС and ОПВ are each a flat percentage of the full gross**, not cascaded off one another —
   confirmed against a real payslip, where treating them as cascading under-deducts by several
   thousand tenge. Only **ИПН** is computed on what ОСМС, ОПВ, and a standard legal deduction (a
-  plain number, since it tracks the yearly минимальный расчётный показатель update) leave.
+  plain number, since it tracks the yearly минимальный расчётный показатель update) leave;
+- block hours themselves default to the airline's own **published CrewPay Norm block times**
+  (`src/lib/pay/crewPayNorm.ts`) rather than the roster's real/operated time — this is what
+  explained a real gap found this session, where a month's actual block time (91.88 h) fell 3.55 h
+  short of what its payslip evidently paid (95.43 h). The norm table is looked up per sector by
+  DEP/ARR pair and only within its own stated effective window (currently version 1.64,
+  2025‑10‑01–2026‑03‑31); any sector whose route isn't listed, or whose date falls outside that
+  window, falls back to actual time, exactly as the published document itself specifies. A toggle
+  in Settings switches the whole Pay tab back to actual-only. This basis **never** affects the
+  Totals tab, the logbook, or the 60h/80h monthly banding — those stay on real roster block time,
+  which is what a logbook should record.
 
 `src/lib/pay/__tests__/calculatePay.test.ts` reproduces a real Air Astana cabin-crew payslip's own
 worked example to the tenge — 95.43 h, 20 sectors, 1.72 h positioning, 3 sick days and 1 unfit day
@@ -143,10 +153,10 @@ a bigger month is still costed.
 
 Hours are converted **exactly** from the minutes flown — 91:53 is 91.88 h, not 91.53. A
 spreadsheet with the roster's "91,53" typed straight into a decimal cell reads slightly lower.
-Note that block hours as this app derives them from the roster (matched to the minute against the
-roster's own printed Block Hours total) are not guaranteed to equal whatever hour figure a payroll
-system credits — some agreements pay scheduled rather than realised time, or give duty-period
-minimums — so the Pay tab's total is only as good as its block-hours input; check it against a
+The CrewPay Norm table bundled in `crewPayNorm.ts` is hand-transcribed from the airline's own
+published document and only covers what was available at the time — it is a checked-in static
+file with no generator script (the same way `src/lib/daynight/airportDb.ts` is), and needs
+updating by hand whenever the airline publishes a new season's table. Check the Pay tab against a
 real payslip for your own agreement before relying on it.
 
 Airport codes are stored exactly as the roster prints them (IATA: `ALA`, `NQZ`, `AYT`) and exactly
@@ -159,7 +169,7 @@ code for its coordinates and timezone.
 ```bash
 npm install
 npm start          # Expo dev server
-npm test           # 162 tests
+npm test           # 167 tests
 npx tsc --noEmit   # typecheck
 ```
 
