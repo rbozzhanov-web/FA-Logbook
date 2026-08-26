@@ -10,6 +10,14 @@ import {
   describeNightWindow,
 } from '@/src/lib/daynight/nightWindow';
 import { readNightWindow } from '@/src/lib/settings';
+import {
+  BAND_LOWER_HOURS,
+  BAND_UPPER_HOURS,
+  BandTotals,
+  MonthTotals,
+  bandTotals,
+  monthlyTotals,
+} from '@/src/lib/monthlyTotals';
 import { LogbookSummary, ZERO_SUMMARY, summarise } from '@/src/lib/summary';
 import { minutesToDecimalHours, minutesToHHMM } from '@/src/lib/time';
 import { AppColors, useAppTheme } from '@/src/theme';
@@ -18,6 +26,8 @@ export default function TotalsScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [totals, setTotals] = useState<LogbookSummary>(ZERO_SUMMARY);
+  const [months, setMonths] = useState<MonthTotals[]>([]);
+  const [bands, setBands] = useState<BandTotals>(EMPTY_BANDS);
   const [window, setWindow] = useState<NightWindow>(DEFAULT_NIGHT_WINDOW);
 
   useDataRefresh(
@@ -25,8 +35,11 @@ export default function TotalsScreen() {
       // The night window is read alongside the entries rather than cached, so changing it in
       // Settings re-reports the whole logbook the next time this screen is looked at.
       Promise.all([listEntries(), readNightWindow()]).then(([entries, nightWindow]) => {
+        const byMonth = monthlyTotals(entries, nightWindow);
         setWindow(nightWindow);
         setTotals(summarise(entries, nightWindow));
+        setMonths(byMonth);
+        setBands(bandTotals(byMonth));
       });
     }, []),
   );
@@ -62,13 +75,123 @@ export default function TotalsScreen() {
           <CountStat label="Duties" value={totals.dutyCount} />
         </Group>
 
+        <Group
+          title="Productivity bands"
+          note={`Block hours split across the ${BAND_LOWER_HOURS}h and ${BAND_UPPER_HOURS}h thresholds, banded per month and then added up — never from the career total, which would put every month above the line.`}
+        >
+          <Stat label={`Hours ${BAND_LOWER_HOURS}–${BAND_UPPER_HOURS}`} minutes={bands.midMinutes} emphasis />
+          <Stat label={`Hours over ${BAND_UPPER_HOURS}`} minutes={bands.highMinutes} emphasis />
+          <CountStat label={`Months reaching ${BAND_LOWER_HOURS}h`} value={bands.monthsInMid + bands.monthsInHigh} />
+          <CountStat label={`Months over ${BAND_UPPER_HOURS}h`} value={bands.monthsInHigh} />
+        </Group>
+
+        <Group
+          title="Sick leave"
+          note="Days the roster recorded as absence. SICK is certified sick leave; UFF is temporary unfitness to fly, which the report records without a sicknote."
+        >
+          <CountStat label="Sick days" value={bands.sickDays} />
+          <CountStat label="Months with sick leave" value={bands.monthsWithSickLeave} />
+          <CountStat label="Unfit-to-fly days" value={bands.unfitDays} />
+        </Group>
+
         <Group title="Counts">
           <CountStat label="Sectors operated" value={totals.sectorCount} />
           <CountStat label="Sectors with night time" value={totals.nightSectorCount} />
           <CountStat label="Deadhead sectors" value={totals.deadheadCount} />
           <CountStat label="Ground duties" value={totals.groundDutyCount} />
         </Group>
+
+        <Group title="By month">
+          {months.length === 0 ? (
+            <Text style={styles.groupNote}>Nothing logged yet.</Text>
+          ) : (
+            <>
+              <MonthHeaderRow />
+              {months.map((month) => (
+                <MonthRow key={month.key} month={month} />
+              ))}
+            </>
+          )}
+        </Group>
       </ScrollView>
+    </View>
+  );
+}
+
+const EMPTY_BANDS: BandTotals = {
+  midMinutes: 0,
+  highMinutes: 0,
+  monthsInMid: 0,
+  monthsInHigh: 0,
+  sickDays: 0,
+  unfitDays: 0,
+  monthsWithSickLeave: 0,
+};
+
+/**
+ * One month's line: sectors worked, block hours, how those hours fall across the two thresholds,
+ * and whether any of the month was lost to sickness. Blank rather than "00:00" where a band was
+ * never reached, so the months that did reach it stand out.
+ */
+function MonthRow({ month }: { month: MonthTotals }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View style={styles.monthRow}>
+      <Text style={[styles.monthCell, styles.monthLabelCell]} numberOfLines={1}>
+        {month.label}
+      </Text>
+      <Text style={[styles.monthCell, styles.monthNumberCell]}>{month.sectorCount}</Text>
+      <Text style={[styles.monthCell, styles.monthNumberCell, styles.monthTotalCell]}>
+        {minutesToHHMM(month.blockMinutes)}
+      </Text>
+      <Text
+        style={[
+          styles.monthCell,
+          styles.monthNumberCell,
+          month.bands.midMinutes > 0 && styles.monthBandActive,
+        ]}
+      >
+        {month.bands.midMinutes > 0 ? minutesToHHMM(month.bands.midMinutes) : '–'}
+      </Text>
+      <Text
+        style={[
+          styles.monthCell,
+          styles.monthNumberCell,
+          month.bands.highMinutes > 0 && styles.monthBandActive,
+        ]}
+      >
+        {month.bands.highMinutes > 0 ? minutesToHHMM(month.bands.highMinutes) : '–'}
+      </Text>
+      <Text style={[styles.monthCell, styles.monthSickCell, month.sickDays > 0 && styles.monthSickActive]}>
+        {formatSick(month)}
+      </Text>
+    </View>
+  );
+}
+
+function formatSick(month: MonthTotals): string {
+  if (month.sickDays === 0 && month.unfitDays === 0) return '–';
+  if (month.unfitDays === 0) return String(month.sickDays);
+  if (month.sickDays === 0) return `+${month.unfitDays}u`;
+  return `${month.sickDays}+${month.unfitDays}u`;
+}
+
+function MonthHeaderRow() {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View style={[styles.monthRow, styles.monthHeaderRow]}>
+      <Text style={[styles.monthHeaderCell, styles.monthLabelCell]}>Month</Text>
+      <Text style={[styles.monthHeaderCell, styles.monthNumberCell]}>Sect</Text>
+      <Text style={[styles.monthHeaderCell, styles.monthNumberCell]}>Block</Text>
+      <Text style={[styles.monthHeaderCell, styles.monthNumberCell]}>
+        {BAND_LOWER_HOURS}–{BAND_UPPER_HOURS}
+      </Text>
+      <Text style={[styles.monthHeaderCell, styles.monthNumberCell]}>{BAND_UPPER_HOURS}+</Text>
+      <Text style={[styles.monthHeaderCell, styles.monthSickCell]}>Sick</Text>
     </View>
   );
 }
@@ -142,4 +265,28 @@ const createStyles = (c: AppColors) =>
     value: { fontSize: 16, fontWeight: '600', color: c.text, fontVariant: ['tabular-nums'] },
     valueEmphasis: { fontSize: 19, fontWeight: '700' },
     subvalue: { fontSize: 12, color: c.textMuted },
+
+    monthRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    monthHeaderRow: { borderBottomColor: c.accent, borderBottomWidth: 1, paddingVertical: 6 },
+    monthHeaderCell: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: c.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+    },
+    monthCell: { fontSize: 13, color: c.text, fontVariant: ['tabular-nums'] },
+    // The label takes the slack so the numeric columns stay aligned down the table.
+    monthLabelCell: { flex: 1, textAlign: 'left', paddingRight: 8 },
+    monthNumberCell: { width: 54, textAlign: 'right' },
+    monthTotalCell: { fontWeight: '700' },
+    monthBandActive: { color: c.text, fontWeight: '600' },
+    monthSickCell: { width: 48, textAlign: 'right', color: c.textMuted },
+    monthSickActive: { color: c.danger, fontWeight: '700' },
   });

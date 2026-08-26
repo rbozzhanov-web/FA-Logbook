@@ -87,6 +87,30 @@ describe('totals', () => {
     expect(totals.nightMinutes).toBe(0);
   });
 
+  it('never counts an absence as a sector', () => {
+    // An absence carries no hours, so falling through to the operating branch would add a
+    // phantom sector with zero block time — quietly wrong in exactly the count being asked for.
+    const totals = summarise([
+      entry({ blockMinutes: 120, dayMinutes: 120 }),
+      entry({ kind: 'absence', dutyCode: 'SICK' }),
+      entry({ kind: 'absence', dutyCode: 'SICK' }),
+      entry({ kind: 'absence', dutyCode: 'UFF' }),
+    ]);
+
+    expect(totals.sectorCount).toBe(1);
+    expect(totals.blockMinutes).toBe(120);
+    expect(totals.sickDays).toBe(2);
+    expect(totals.unfitDays).toBe(1);
+  });
+
+  it('never lets an absence contribute a duty', () => {
+    const totals = summarise([
+      entry({ kind: 'absence', dutyCode: 'SICK', dutyStart: '2026-07-14T00:00', dutyEnd: '2026-07-14T23:59' }),
+    ]);
+    expect(totals.dutyCount).toBe(0);
+    expect(totals.dutyMinutes).toBe(0);
+  });
+
   it('reports night with and without deadhead', () => {
     const totals = summarise([
       entry({ blockMinutes: 120, nightMinutes: 60, dayMinutes: 60 }),

@@ -1,5 +1,5 @@
 import { calculateWindowNight, DEFAULT_NIGHT_WINDOW, NightWindow } from '@/src/lib/daynight/nightWindow';
-import { CabinCrewLogEntry } from '@/src/types/logbook';
+import { CabinCrewLogEntry, isSickLeave, isUnfitToFly } from '@/src/types/logbook';
 import { hhmmToMinutes } from './time';
 
 /**
@@ -39,6 +39,10 @@ export interface LogbookSummary {
 
   /** Sectors that departed or landed in darkness. */
   nightSectorCount: number;
+
+  /** Days of certified sick leave, and of temporary unfitness to fly. */
+  sickDays: number;
+  unfitDays: number;
 }
 
 export const ZERO_SUMMARY: LogbookSummary = {
@@ -56,6 +60,8 @@ export const ZERO_SUMMARY: LogbookSummary = {
   dutyMinutes: 0,
   dutyCount: 0,
   nightSectorCount: 0,
+  sickDays: 0,
+  unfitDays: 0,
 };
 
 export function summarise(
@@ -65,7 +71,12 @@ export function summarise(
   const summary: LogbookSummary = { ...ZERO_SUMMARY };
 
   for (const entry of entries) {
-    if (entry.kind === 'ground') {
+    if (entry.kind === 'absence') {
+      // Carries no hours by construction, and must never fall through to the operating branch —
+      // a sick day counted as a sector would inflate the count and leave the hours at zero.
+      if (isSickLeave(entry)) summary.sickDays += 1;
+      else if (isUnfitToFly(entry)) summary.unfitDays += 1;
+    } else if (entry.kind === 'ground') {
       summary.groundDutyCount += 1;
       summary.groundDutyMinutes += entry.groundDutyMinutes;
     } else if (entry.kind === 'deadhead') {
@@ -84,7 +95,7 @@ export function summarise(
 
     // Duty hours belong to the duty, not the sector. A three-sector day is one duty, and adding
     // it up per row would report it three times over.
-    if (isFirstSectorOfDuty(entry)) {
+    if (entry.kind !== 'absence' && isFirstSectorOfDuty(entry)) {
       const minutes = entryDutyMinutes(entry);
       if (minutes !== undefined) {
         summary.dutyMinutes += minutes;

@@ -67,16 +67,37 @@ stored, so changing the window re-reports the whole logbook rather than only fut
 
 ## What gets logged
 
-Three kinds of entry, counted apart because the airline counts them apart:
+Four kinds of entry, counted apart because the airline counts them apart:
 
 | Kind | What it is | Counted as |
 | --- | --- | --- |
 | Operating | Worked the sector as crew | Block hours, day/night |
 | Deadhead | Travelled as a passenger to position | Deadhead hours, kept out of block |
 | Ground | Training, a briefing, a course | Ground duty hours only |
+| Absence | `SICK` (certified) or `UFF` (unfit to fly) | Days, no hours at all |
+
+Days off, downroute days off and standby are deliberately **not** logged — a logbook that
+recorded every day off would just be a copy of the roster. Sickness is the exception, because a
+month's hours are not interpretable without it: sixty hours flown in a month with a week of sick
+leave is a different month from sixty hours flown in a full one.
 
 Duty hours are carried on every sector of a duty and totalled **once per duty** — a three-sector
 day is one duty, not three.
+
+## Month by month
+
+Totals carries a per-month table: sectors worked, block hours, how those hours fall across the
+60h and 80h thresholds, and any sick leave.
+
+The band split is **progressive, and computed per month**. A month of 91:53 contributes 60:00 to
+the base band, 20:00 to the 60–80 band and 11:53 above 80 — the three always sum back to the
+month exactly. Banding a career total instead would put every month above the line, so the split
+is done month by month and only then added up. The thresholds live in
+`src/lib/monthlyTotals.ts` as `BAND_LOWER_HOURS` / `BAND_UPPER_HOURS`; a different agreement is a
+one-line change there.
+
+Only *operating* block hours count toward the bands — deadhead and ground duty are excluded,
+matching the airline's own arithmetic.
 
 Airport codes are stored exactly as the roster prints them (IATA: `ALA`, `NQZ`, `AYT`) and exactly
 as they are typed in. They are never rewritten to ICAO: this logbook is read against the airline's
@@ -88,7 +109,7 @@ code for its coordinates and timezone.
 ```bash
 npm install
 npm start          # Expo dev server
-npm test           # 112 tests
+npm test           # 132 tests
 npx tsc --noEmit   # typecheck
 ```
 
@@ -114,6 +135,7 @@ picks it up automatically and skips when it is absent.
 src/lib/pdfImport/crewSchedule/   reading the roster: grid → duties → sectors, crew lists, memos
 src/lib/daynight/                 timezones, sun position, both night calculations
 src/lib/summary.ts                every total the app reports, from the entries themselves
+src/lib/monthlyTotals.ts          the per-month breakdown and the 60h/80h band split
 src/db/                           SQLite via Drizzle, with a localStorage twin for web
 app/                              expo-router screens
 ```

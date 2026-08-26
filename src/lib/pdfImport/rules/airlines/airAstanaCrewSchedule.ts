@@ -2,7 +2,13 @@ import { calculateDayNight } from '@/src/lib/daynight/nightCalc';
 import { isKnownAirport } from '@/src/lib/daynight/airportDb';
 import { hhmmToMinutes } from '@/src/lib/time';
 import { CabinCrewLogEntry, NEW_ENTRY_DEFAULTS } from '@/src/types/logbook';
-import { RosterDuty, RosterGroundDuty, RosterSector, readRoster } from '../../crewSchedule/duties';
+import {
+  RosterAbsence,
+  RosterDuty,
+  RosterGroundDuty,
+  RosterSector,
+  readRoster,
+} from '../../crewSchedule/duties';
 import { parsePeriod, parseReportTotals, parseSubject } from '../../crewSchedule/header';
 import { DayColumn, extractDayColumns } from '../../crewSchedule/grid';
 import { extractMemos, memosFor } from '../../crewSchedule/memos';
@@ -67,6 +73,10 @@ export const airAstanaCrewScheduleRule: ParserRule = {
 
     for (const ground of roster.groundDuties) {
       candidates.push(buildGroundCandidate(ground, subject?.base, subject?.rank));
+    }
+
+    for (const absence of roster.absences) {
+      candidates.push(buildAbsenceCandidate(absence, subject?.base, subject?.rank));
     }
 
     candidates.sort(byDateThenTime);
@@ -251,6 +261,35 @@ function buildGroundCandidate(
     rawSourceLine: `${ground.date} ${ground.code} ${ground.start}-${ground.end}`,
     confidence: unmatchedFields.length === 0 ? 'high' : 'medium',
     unmatchedFields,
+  };
+}
+
+/**
+ * A day of absence: sick leave, or temporarily unfit to fly.
+ *
+ * No hours of any kind, and deliberately so — it is logged because a month's figures cannot be
+ * read without it, not because anything was flown. Sixty hours in a month with a week of sick
+ * leave is a different month from sixty hours in a full one.
+ */
+function buildAbsenceCandidate(
+  absence: RosterAbsence,
+  base: string | undefined,
+  rank: string | undefined,
+): ParsedCandidate {
+  return {
+    fields: {
+      ...NEW_ENTRY_DEFAULTS,
+      date: absence.date,
+      kind: 'absence',
+      departureAirport: base ?? '',
+      arrivalAirport: base ?? '',
+      dutyCode: absence.code,
+      position: rank,
+      source: 'pdf_import',
+    },
+    rawSourceLine: `${absence.date} ${absence.code}`,
+    confidence: 'high',
+    unmatchedFields: [],
   };
 }
 

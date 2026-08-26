@@ -14,7 +14,7 @@ import { ParsedCandidate } from '../types';
  *  - a day off, a downroute day off with its 00:00–23:59 pair, and a ground duty.
  */
 const SPEC: ReportSpec = {
-  period: '01/07/2026 - 10/07/2026',
+  period: '01/07/2026 - 13/07/2026',
   subject: '8557 DOE JANE ALA-FJ-321L',
   blockHours: '25:36',
   nightHours: '08:00',
@@ -54,7 +54,9 @@ const SPEC: ReportSpec = {
     // Flight 157's arrival, a day later and two timezones east.
     { day: '06/07', weekday: 'Mon', cells: ['↓', 'CXR', 'A09:03', '[321L]', '09:33'] },
 
-    { day: '07/07', weekday: 'Tue', cells: ['OFF'] },
+    // Three consecutive sick days, and one day unfit to fly — the absences that explain a short
+    // month, sitting among the days off that are deliberately not logged.
+    { day: '07/07', weekday: 'Tue', cells: ['SICK'] },
 
     // A duty that crosses midnight although its sector landed before it: the arrow stands alone.
     {
@@ -70,6 +72,9 @@ const SPEC: ReportSpec = {
 
     // A ground duty: a code and its two times.
     { day: '10/07', weekday: 'Fri', cells: ['HYGT', '08:00', '17:00'] },
+    { day: '11/07', weekday: 'Sat', cells: ['SICK'] },
+    { day: '12/07', weekday: 'Sun', cells: ['UFF'] },
+    { day: '13/07', weekday: 'Mon', cells: ['AVLB'] },
   ],
   crew: [
     {
@@ -102,14 +107,43 @@ describe('the Air Astana crew schedule parser', () => {
       base: 'ALA',
       rank: 'FJ',
       periodStart: '2026-07-01',
-      periodEnd: '2026-07-10',
+      periodEnd: '2026-07-13',
     });
   });
 
-  it('reads every sector and the ground duty, and nothing else', () => {
+  it('reads every sector, the ground duty and the absences, and nothing else', () => {
     expect(new Set(byFlight.keys())).toEqual(
-      new Set(['925', '8510', '313', '314', '157', '859', '860', 'HYGT']),
+      new Set(['925', '8510', '313', '314', '157', '859', '860', 'HYGT', 'SICK', 'UFF']),
     );
+  });
+
+  it('logs sick days, one entry per day, with no hours of any kind', () => {
+    const sick = result.candidates.filter((c) => c.fields.dutyCode === 'SICK');
+    expect(sick).toHaveLength(2);
+    expect(sick.map((c) => c.fields.date).sort()).toEqual(['2026-07-07', '2026-07-11']);
+
+    for (const day of sick) {
+      expect(day.fields.kind).toBe('absence');
+      expect(day.fields.blockMinutes).toBe(0);
+      expect(day.fields.deadheadMinutes).toBe(0);
+      expect(day.fields.groundDutyMinutes).toBe(0);
+      expect(day.fields.nightMinutes).toBe(0);
+    }
+  });
+
+  it('keeps unfit-to-fly apart from certified sick leave', () => {
+    // The report's own legend distinguishes them: SICK carries a sicknote, UFF does not.
+    const unfit = result.candidates.filter((c) => c.fields.dutyCode === 'UFF');
+    expect(unfit).toHaveLength(1);
+    expect(unfit[0].fields.kind).toBe('absence');
+  });
+
+  it('does not log days off, downroute days off or standby', () => {
+    // A logbook that recorded every day off would be a copy of the roster.
+    const codes = result.candidates.map((c) => c.fields.dutyCode);
+    expect(codes).not.toContain('OFF');
+    expect(codes).not.toContain('DOFF');
+    expect(codes).not.toContain('AVLB');
   });
 
   it('converts station-local clock times into real block time across timezones', () => {
@@ -200,7 +234,7 @@ describe('the Air Astana crew schedule parser', () => {
     const dates = result.candidates.map((c) => c.fields.date);
     expect(dates).not.toContain('2026-07-01');
     expect(dates).not.toContain('2026-07-03');
-    expect(dates).not.toContain('2026-07-07');
+    expect(dates).not.toContain('2026-07-13');
   });
 
   it('reads the crew list, including a details cell that wraps onto another line', () => {

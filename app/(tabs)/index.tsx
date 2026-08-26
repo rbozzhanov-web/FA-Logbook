@@ -197,18 +197,20 @@ function EntryRow({ entry, onPress }: { entry: CabinCrewLogEntry; onPress: () =>
 
   const isGround = entry.kind === 'ground';
   const isDeadhead = entry.kind === 'deadhead';
-  // A ground duty has no route; showing it as "ALA → ALA" would read like a flight that never
-  // moved, so it leads with its own code instead.
-  const title = isGround
-    ? entry.dutyCode ?? 'Ground duty'
+  const isAbsence = entry.kind === 'absence';
+  const isDayRecord = isGround || isAbsence;
+  // Neither a ground duty nor an absence has a route; showing one as "ALA → ALA" would read like
+  // a flight that never moved, so they lead with their own code instead.
+  const title = isDayRecord
+    ? entry.dutyCode ?? (isAbsence ? 'Absence' : 'Ground duty')
     : `${entry.departureAirport} → ${entry.arrivalAirport}`;
   const minutes = isGround ? entry.groundDutyMinutes : sectorMinutes(entry);
 
   const meta = [
     entry.date,
-    isGround ? entry.departureAirport : entry.flightNumber,
-    isGround ? undefined : entry.aircraftType,
-    entry.position,
+    isDayRecord ? undefined : entry.flightNumber,
+    isDayRecord ? undefined : entry.aircraftType,
+    isAbsence ? undefined : entry.position,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -220,12 +222,14 @@ function EntryRow({ entry, onPress }: { entry: CabinCrewLogEntry; onPress: () =>
           <Text style={styles.route}>{title}</Text>
           {isDeadhead && <Badge label="DH" />}
           {isGround && <Badge label="GND" />}
+          {isAbsence && <Badge label="OFF SICK" />}
         </View>
         <Text style={styles.meta}>{meta}</Text>
       </View>
       <View style={styles.rowRight}>
+        {/* An absence has no hours at all, so it shows none rather than a misleading "00:00". */}
         <Text style={[styles.time, (isGround || isDeadhead) && styles.mutedTime]}>
-          {minutesToHHMM(minutes)}
+          {isAbsence ? '' : minutesToHHMM(minutes)}
         </Text>
         {entry.nightMinutes > 0 && (
           <Text style={styles.nightTime}>night {minutesToHHMM(entry.nightMinutes)}</Text>

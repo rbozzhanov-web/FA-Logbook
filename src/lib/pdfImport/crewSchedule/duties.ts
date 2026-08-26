@@ -1,4 +1,5 @@
 import { hhmmToMinutes } from '@/src/lib/time';
+import { LOGGED_ABSENCE_CODES } from '@/src/types/logbook';
 import {
   CONTINUED_GLYPH,
   CONTINUES_GLYPH,
@@ -37,6 +38,12 @@ export interface RosterSector {
   dutySectorIndex: number;
 }
 
+/** A day the crew member was absent: sick, or temporarily unfit to fly. Carries no hours. */
+export interface RosterAbsence {
+  code: string;
+  date: string;
+}
+
 /** A ground duty: a training course, a briefing — a real duty with hours but no aircraft. */
 export interface RosterGroundDuty {
   code: string;
@@ -57,6 +64,7 @@ export interface RosterDuty {
 export interface RosterReading {
   sectors: RosterSector[];
   groundDuties: RosterGroundDuty[];
+  absences: RosterAbsence[];
   duties: RosterDuty[];
   /** Cells the grammar could not place, so an unfamiliar roster variant is visible, not silent. */
   unreadCells: string[];
@@ -88,6 +96,7 @@ const GROUND_DUTY_CODE_RE = /^[A-Z][A-Z0-9_]{1,7}$/;
 export function readRoster(columns: DayColumn[], periodStart: string, periodEnd: string): RosterReading {
   const sectors: RosterSector[] = [];
   const groundDuties: RosterGroundDuty[] = [];
+  const absences: RosterAbsence[] = [];
   const duties: RosterDuty[] = [];
   const unreadCells: string[] = [];
 
@@ -123,6 +132,11 @@ export function readRoster(columns: DayColumn[], periodStart: string, periodEnd:
       }
 
       if (NON_DUTY_CODES.has(cell)) {
+        // Sickness is recorded; days off, downroute days off and standby are not. A logbook that
+        // logged every day off would be a copy of the roster, but a month's hours cannot be read
+        // without knowing whether the crew member was available to fly them.
+        if (LOGGED_ABSENCE_CODES.has(cell)) absences.push({ code: cell, date });
+
         // A day off can still carry a time pair (a downroute day off prints 00:00–23:59); step
         // over it so the pair is not mistaken for a duty.
         i += 1;
@@ -217,7 +231,7 @@ export function readRoster(columns: DayColumn[], periodStart: string, periodEnd:
     }
   }
 
-  return { sectors, groundDuties, duties, unreadCells };
+  return { sectors, groundDuties, absences, duties, unreadCells };
 }
 
 interface SectorRead {

@@ -1,12 +1,16 @@
 /**
- * What the crew member did on a logged sector.
+ * What the crew member did on a logged day.
  *
- * The three are kept apart because they are counted apart. The airline's own crew-schedule
- * report proves the distinction: its "Block Hours" figure sums operating sectors only, and a
+ * They are kept apart because they are counted apart. The airline's own crew-schedule report
+ * proves the first distinction: its "Block Hours" figure sums operating sectors only, and a
  * deadhead sector — the crew travelling as a passenger to reposition — is excluded from it
  * entirely, even though it sits in the roster grid looking exactly like a flight.
+ *
+ * `absence` is the odd one out: it carries no hours at all. It exists because a month's figures
+ * are not interpretable without it — sixty hours flown in a month with a week of sick leave is a
+ * different month from sixty hours flown in a full one.
  */
-export type SectorKind = 'operating' | 'deadhead' | 'ground';
+export type SectorKind = 'operating' | 'deadhead' | 'ground' | 'absence';
 
 export type EntrySource = 'manual' | 'pdf_import';
 
@@ -63,7 +67,11 @@ export interface CabinCrewLogEntry {
    * the code, and inventing a title for a rank the report never spells out would be a guess.
    */
   position?: string;
-  /** Roster code for a ground duty, e.g. HYGT for hygiene training. */
+  /**
+   * Roster code for a ground duty (HYGT for hygiene training) or an absence (SICK, UFF). Kept as
+   * the airline's own code rather than a translation: the roster's legend defines them, and which
+   * ones count as sick leave is a question about the codes, not about a paraphrase of them.
+   */
   dutyCode?: string;
 
   /**
@@ -106,4 +114,27 @@ export const NEW_ENTRY_DEFAULTS: EntryCounters = {
 /** The airborne time of a sector, whichever way it was flown. Zero on the ground. */
 export function sectorMinutes(entry: Pick<CabinCrewLogEntry, 'blockMinutes' | 'deadheadMinutes'>): number {
   return entry.blockMinutes + entry.deadheadMinutes;
+}
+
+/**
+ * Absence codes the roster's own legend defines, and what each means for a month's figures.
+ *
+ * "SICK - Sickness With Sicknote" is sick leave proper — the thing that explains a short month.
+ * "UFF - Unfit To Fly (Temporary Code)" is also a medical absence but a different one, recorded
+ * without a sicknote, so it is counted alongside rather than merged in. Days off, downroute days
+ * off and standby are not absences in this sense and are not logged at all: this is a logbook,
+ * not a copy of the roster.
+ */
+export const SICK_LEAVE_CODES = new Set(['SICK']);
+export const UNFIT_TO_FLY_CODES = new Set(['UFF']);
+
+/** Codes worth logging as an absence. Everything else on a non-duty day is left out. */
+export const LOGGED_ABSENCE_CODES = new Set([...SICK_LEAVE_CODES, ...UNFIT_TO_FLY_CODES]);
+
+export function isSickLeave(entry: Pick<CabinCrewLogEntry, 'kind' | 'dutyCode'>): boolean {
+  return entry.kind === 'absence' && entry.dutyCode !== undefined && SICK_LEAVE_CODES.has(entry.dutyCode);
+}
+
+export function isUnfitToFly(entry: Pick<CabinCrewLogEntry, 'kind' | 'dutyCode'>): boolean {
+  return entry.kind === 'absence' && entry.dutyCode !== undefined && UNFIT_TO_FLY_CODES.has(entry.dutyCode);
 }

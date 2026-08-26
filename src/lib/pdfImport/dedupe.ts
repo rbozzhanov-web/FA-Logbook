@@ -28,9 +28,10 @@ function isLikelyDuplicate(candidate: ParsedCandidate, existing: CabinCrewLogEnt
   if (!fields.date) return false;
   if (fields.date !== existing.date) return false;
 
-  // A ground duty has no route to match on, so it is identified by its code and date instead —
-  // and must never collapse into a sector that happens to share the day.
-  if (fields.kind === 'ground' || existing.kind === 'ground') {
+  // A ground duty or an absence has no route to match on, so it is identified by its code and
+  // date instead — and must never collapse into a sector that happens to share the day.
+  const isDayRecord = (kind: string | undefined) => kind === 'ground' || kind === 'absence';
+  if (isDayRecord(fields.kind) || isDayRecord(existing.kind)) {
     return fields.kind === existing.kind && fields.dutyCode === existing.dutyCode;
   }
 
